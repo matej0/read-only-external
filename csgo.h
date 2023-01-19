@@ -1,7 +1,8 @@
 #pragma once
-#include <cstddef>
+#include <cstdint>
 
 // 2022-12-18 18:15:15.246968900 UTC
+
 namespace hazedumper {
 	constexpr ::std::int64_t timestamp = 1671387315;
 	namespace netvars {

@@ -17,6 +17,7 @@
 #include <math.h>
 #include "sdk.h"
 constexpr float RADARRADIUS = 125.0f;
+constexpr std::ptrdiff_t cl_radar_scale = (0xE085F8 - 0x10000); // first offset is from IDA, 2nd is just subtracting base.
 
 
 bool aimbot;
@@ -63,6 +64,7 @@ struct offsets {
 	Vector3D local_eye_angles; // from netvar.
 	Vector3D local_eye_position;
 	Vector3D local_origin;
+	float radar_scale;
 } globals;
 
 DWORD game_process_id;
@@ -260,7 +262,7 @@ int health(DWORD entity)
 
 bool alive(DWORD entity) 
 {
-	return (health <= 0);
+	return (health > 0);
 }
 
 int team(DWORD entity)
@@ -277,74 +279,6 @@ bool dormant(DWORD entity)
 	return read<bool>(game_handle, entity + hazedumper::signatures::m_bDormant);
 }
 
-
-Vector3D rotate_point(const Vector3D& point, const Vector3D& center, float angle)
-{
-	/*float _cos = std::cosf(DEG2RAD(angle));
-	float _sin = std::sinf(DEG2RAD(angle));
-
-	Vector3D relative =
-	{
-		point.x - center.x,
-		point.y - center.y
-	};
-
-	Vector3D rotated =
-	{
-		_cos * (relative.x) - _sin * (relative.y),
-		_sin * (relative.x) + _cos * (relative.y)
-	};
-
-	rotated += center;
-
-	return rotated;*/
-
-	float costheta = (float)std::cosf(DEG2RAD(angle));
-	float sintheta = (float)std::sinf(DEG2RAD(angle));
-
-	Vector3D out = {
-		costheta * (point.x - center.y) - sintheta * (point.y - center.y),
-		sintheta * (point.x - center.y) + costheta * (point.y - center.y)
-	};
-
-	out += center;
-	return out;
-		
-};
-
-
-void get_radar_point(Vector3D enemy, Vector3D local, Vector3D local_angle, float &d, float &p, float hud_scale)
-{
-	float delta_x = enemy.x - local.x;
-	float delta_y = enemy.y - local.y;
-
-	float radar_scale = 0.7f / 10.f;
-	const float radar_radius = 125.f;
-
-	delta_x *= radar_scale;
-	delta_y *= radar_scale;
-
-
-	Vector3D point = { delta_x, delta_y };
-
-	/*if (point.Length() >= radar_radius)
-	{
-		auto clip = point.Normalize();
-		point.x = clip * radar_radius;
-		point.y = clip * radar_radius;
-	}*/
-
-	point.y *= -1.f;
-
-	Vector3D center = { 145.f, 195.f };
-	point += center;
-
-	Vector3D pos = rotate_point(point, center, local_angle.y - 90.f);
-
-	d = pos.x;
-	p = pos.y;
-}
-
 void WorldToRadar(const Vector3D& ptin, Vector3D& ptout, Vector2D map)
 {
 	const float pixel_to_radar_scale = 0.586f; // always constant.
@@ -352,10 +286,10 @@ void WorldToRadar(const Vector3D& ptin, Vector3D& ptout, Vector2D map)
 	const float world_to_pixel_scale = read<float>(game_handle, radar_base + 0x108);
 	float world_to_radar_scale = world_to_pixel_scale * pixel_to_radar_scale;
 
-	float fWorldScale = world_to_radar_scale;//world_to_radar_scale;
+	float fWorldScale = world_to_radar_scale;
 	float flMapScaler = 0.f;
 
-	float fScale = 0.7f + flMapScaler;
+	float fScale = globals.radar_scale + flMapScaler;
 
 	fWorldScale *= fScale;
 
@@ -363,50 +297,6 @@ void WorldToRadar(const Vector3D& ptin, Vector3D& ptout, Vector2D map)
 	ptout.y = (((map.y) - ptin.y) * fWorldScale);
 	ptout.z = 0.f;
 }
-
-//void Vector3DMultiply(const D3DMATRIX3 &src1, const Vector3D &src2, Vector3D &dst)
-//{
-//	// Make sure it works if src2 == dst
-//	Vector3D tmp;
-//	const Vector3D &v = (&src2 == &dst) ? static_cast<const Vector3D>(tmp) : src2;
-//
-//	if (&src2 == &dst)
-//	{
-//		VectorCopy(src2, tmp);
-//	}
-//
-//	dst[0] = src1.m[0][0] * v[0] + src1.m[0][1] * v[1] + src1.m[0][2] * v[2];
-//	dst[1] = src1.m[1][0] * v[0] + src1.m[1][1] * v[1] + src1.m[1][2] * v[2];
-//	dst[2] = src1.m[2][0] * v[0] + src1.m[2][1] * v[1] + src1.m[2][2] * v[2];
-//}
-//
-//
-//
-//void MatrixBuildRotateZ(D3DMATRIX3 &dst, float angleDegrees)
-//{
-//	float radians = angleDegrees * (M_PI / 180.0f);
-//
-//	float fSin = (float)sin(radians);
-//	float fCos = (float)cos(radians);
-//
-//	dst.m[0][0] = fCos; dst.m[0][1] = -fSin; dst.m[0][2] = 0.0f; dst.m[0][3] = 0.0f;
-//	dst.m[1][0] = fSin; dst.m[1][1] = fCos; dst.m[1][2] = 0.0f; dst.m[1][3] = 0.0f;
-//	dst.m[2][0] = 0.0f; dst.m[2][1] = 0.0f; dst.m[2][2] = 1.0f; dst.m[2][3] = 0.0f;
-//	dst.m[3][0] = 0.0f; dst.m[3][1] = 0.0f; dst.m[3][2] = 0.0f; dst.m[3][3] = 1.0f;
-//}
-//
-//
-//void RadarToHud(const Vector3D& ptin, Vector3D& ptout, float rotation, Vector3D local_radar)
-//{
-//	D3DMATRIX3 rot;
-//	MatrixBuildRotateZ(rot, rotation);
-//
-//	Vector3D multed;
-//	multed.x = ptin.x - local_radar.x;
-//	multed.y = ptin.y - local_radar.y;
-//
-//	Vector3DMultiply(rot, multed, ptout);
-//}
 
 void Vector3DMultiply(const D3DMATRIX3 &src1, const Vector3D &src2, Vector3D &dst)
 {
@@ -527,8 +417,6 @@ void esp(aero::surface_ptr surface, aero::font_ptr font, DWORD local_entity)
 		if (!entity || health(entity) < 1 || !enemy(entity, local_entity))
 			continue;
 		
-		//std::cout << i << ": " << health(entity) << std::endl;
-
 		CHudRadar hud_radar = read<CHudRadar>(game_handle, radar_base); // read it as a class so we can access the radar information
 		const auto radar_player = read<SFMapOverviewIconPackage>(game_handle, radar_base + 0xB0 + (sizeof(SFMapOverviewIconPackage) * (i * 0x10)));
 
@@ -573,66 +461,44 @@ void esp(aero::surface_ptr surface, aero::font_ptr font, DWORD local_entity)
 
 		if (radar)
 		{
-			if (/*!dormant(entity) && */health(local_entity) > 0)
+			if (health(local_entity) > 0)
 			{
 				Vector3D my_origin = read<Vector3D>(game_handle, local_entity + hazedumper::netvars::m_vecOrigin);
 				Vector3D enemy_origin = read<Vector3D>(game_handle, entity + hazedumper::netvars::m_vecOrigin);
 
-				//if (dormant(entity) || radar_player.m_bIsDead)
-				//	enemy_origin = radar_player.m_Position;
+				Vector3D map_position;
+				WorldToRadar(enemy_origin, map_position, hud_radar.m_vMapPos);
 
-				//printf("scale: %.f, %.f\n", hud_radar.m_flScale, radar_player.m_HudScale);
-				//printf("hud rot: %.f\n", radar_player.m_HudRotation);
+				Vector3D radar_view_point_world = my_origin;
+				radar_view_point_world.z = 0.f;
 
-				//float rx, ry, z, scale;
-				//get_radar_point(enemy_origin, my_origin, globals.local_view_angles, rx, ry, radar_player.m_HudScale);
-				//surface->text(rx - 4, ry - 4, font, 0xFFFFFFFF, "X");
+				Vector3D radar_view_point_map; // local player position basically.
+				WorldToRadar(radar_view_point_world, radar_view_point_map, hud_radar.m_vMapPos);
 
-				const float mapSize = 320.f;
-				Vector3D mapPosition;
-				Vector3D mapCenter = { mapSize / 2.f, mapSize / 2.f };
-
-				float mapAngle;
-
-				WorldToRadar(enemy_origin, mapPosition, hud_radar.m_vMapPos);
-
-				//printf("%.f : %.f\n", hud_radar.m_vOverviewCoords.x, hud_radar.m_vOverviewCoords.y);
-				//printf("%.f\n", hud_radar.m_flScale);
-
-				Vector3D m_RadarViewpointWorld = my_origin;
-				m_RadarViewpointWorld.z = 0.f;
-
-				Vector3D m_RadarViewpointMap;
-				WorldToRadar(m_RadarViewpointWorld, m_RadarViewpointMap, hud_radar.m_vMapPos);
-
-				Vector3D newMapPosition = mapPosition;
-				newMapPosition -= m_RadarViewpointMap;
+				Vector3D newMapPosition = map_position;
+				newMapPosition -= radar_view_point_map;
 				float dist = newMapPosition.LengthSqr();
 				if (dist > RADARRADIUS*RADARRADIUS)
 				{
 					newMapPosition *= std::sqrt(RADARRADIUS*RADARRADIUS / dist);
-					mapPosition = m_RadarViewpointMap;
-					mapPosition += newMapPosition;
-					//mapAngle = 180.0f*atan2(newMapPosition.y, newMapPosition.x) / 3.141592f + 90;
+					map_position = radar_view_point_map;
+					map_position += newMapPosition;
 				}
 
-			//	else
-				{
-					mapAngle = globals.local_view_angles.y - 90.f;
-				}
+				float map_angle = globals.local_view_angles.y - 90.f;
 
 				Vector3D hudpos;
-				RadarToHud(mapPosition, hudpos, mapAngle, m_RadarViewpointMap);
+				RadarToHud(map_position, hudpos, map_angle, radar_view_point_map);
 				hudpos += { 145, 195 };
 
-				surface->text(hudpos.x, hudpos.y, font, 0xFFFFFFFF, "x");
+				// scaling according to cl_radar_scale 0.7.
+				// if you want to make it dynamic, figure it out on your own.
+				surface->rotate_rect(hudpos.x + 6, hudpos.y, 10, 10, aero::color(255, 0, 0, 255), hudpos.x, hudpos.y, 45.f);
 
-				// non-rotating
-				//surface->text(mapPosition.x - 4, mapPosition.y - 4, font, 0xFFFFFFFF, "x");
-				//surface->text(m_RadarViewpointMap.x - 4, m_RadarViewpointMap.y - 4, font, 0xFFFFFFFF, "+");
+				//surface->text(hudpos.x, hudpos.y, font, 0xFFFFFFFF, "x");
 			}
-			surface->text(145, 195, font, 0xFFFFFFFF, "+");
 
+			surface->text(145, 195, font, 0xFFFFFFFF, "+");
 		}
 
 
@@ -666,10 +532,7 @@ int main()
 		surface->text(5.f, 5.f, font, 0xFFFFFFFF, "this is an example");
 	});*/
 
-
-
-
-
+	//E085F8
 	while (overlay->message_loop()) 
 	{
 		keybinds();
@@ -688,9 +551,12 @@ int main()
 		radar_base = read<DWORD>(game_handle, client_base + hazedumper::signatures::dwRadarBase);
 		radar_base = read<DWORD>(game_handle, radar_base + 0x78); // getting CCSGO_HudRadar
 
+		DWORD other = read<DWORD>(game_handle, client_base + cl_radar_scale + 0x2c);
+		other ^= (client_base + cl_radar_scale);
+		globals.radar_scale = *reinterpret_cast<float*>(&other);
+
 		if (surface->begin_scene()) {
 
-			
 			//aim(local_entity);
 			trigger(local_entity);
 			esp(surface, font, local_entity);

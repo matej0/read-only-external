@@ -15,6 +15,7 @@
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
 
+
 #include <aero-overlay/surface.hpp>
 
 namespace aero::detail {

@@ -65,6 +65,19 @@ public:
         const color& col_outside = 0xFF010101
     ) = 0;
 
+	virtual void rotate_rect(
+		float x,
+		float y,
+		float w,
+		float h,
+		const color & col,
+		const float rx,
+		const float ry,
+		float angle,
+		float thickness_outside = 0.f,
+		const color & col_outside = 0xFF010101
+	) = 0;
+
     virtual void text_ansii(
         float            x,
         float            y,

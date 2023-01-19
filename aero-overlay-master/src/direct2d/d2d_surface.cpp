@@ -226,6 +226,62 @@ void d2d_surface::rect(
     );
 }
 
+void d2d_surface::rotate_rect(
+	const float  x,
+	const float  y,
+	const float  w,
+	const float  h,
+	const color& col,
+	const float rx, 
+	const float ry, 
+	float angle,
+	const float thickness_outside,
+	const color& col_outside
+)
+{
+	if (thickness_outside >= 1.f) {
+		const auto value = detail::round_float(thickness_outside);
+		const auto mod = value * 2.f;
+
+		rotate_rect(
+			x - value,
+			y - value,
+			w + mod,
+			h + mod,
+			col,
+			rx,
+			ry,
+			angle,
+			0.f,
+			col_outside
+
+		);
+	}
+
+	set_color(col);
+
+	// store transform for later.
+	D2D1_MATRIX_3X2_F transform;
+	_render_target->GetTransform(
+		&transform
+	);
+
+	_render_target->SetTransform(
+		D2D1::Matrix3x2F::Rotation(angle, 
+		D2D1::Point2F(rx, ry))
+	);
+
+	_render_target->FillRectangle(
+		D2D1::RectF(x, y, x + w, y + h),
+		_brush
+	);
+
+	// restore so it doesnt fuck up the rest of the shapes.
+	_render_target->SetTransform(
+		transform
+	);
+}
+
 void d2d_surface::text_ansii(
     const float            x,
     const float            y,
